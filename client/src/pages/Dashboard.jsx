@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { FiUsers } from "react-icons/fi";
 import api from "../api";
 
+import AIAssistant from "../components/AIAssistant";
+
 function Dashboard() {
   const navigate = useNavigate();
 
@@ -14,8 +16,7 @@ function Dashboard() {
     youAreOwed: 0,
     activeGroups: 0,
   });
-  const [recentExpenses, setRecentExpenses] = useState([]);
-  const [groups, setGroups] = useState([]);
+  const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [monthlySpending, setMonthlySpending] = useState(0);
 
   const formatCurrency = (amount) =>
@@ -67,8 +68,10 @@ function Dashboard() {
         )
       );
 
+      const email = localStorage.getItem("email");
       const allExpenses = expenseLists
         .flat()
+        .filter((expense) => expense.paidBy?.email === email)
         .sort((a, b) => new Date(b.date) - new Date(a.date));
 
       
@@ -76,14 +79,24 @@ function Dashboard() {
       const currentMonth = now.getMonth();
       const currentYear = now.getFullYear();
 
-      const thisMonthTotal = allExpenses
-        .filter((exp) => {
-          const d = new Date(exp.date);
-          return (
-            d.getMonth() === currentMonth && d.getFullYear() === currentYear
-          );
-        })
-        .reduce((sum, exp) => sum + Number(exp.amount), 0);
+      const thisMonthExpenses = allExpenses.filter((exp) => {
+        const d = new Date(exp.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      });
+
+      const thisMonthTotal = thisMonthExpenses.reduce(
+        (sum, exp) => sum + Number(exp.amount),
+        0
+      );
+
+      const breakdown = {};
+      thisMonthExpenses.forEach((exp) => {
+        breakdown[exp.category] = (breakdown[exp.category] || 0) + Number(exp.amount);
+      });
+
+      const formattedBreakdown = Object.entries(breakdown)
+        .map(([category, amount]) => ({ category, amount }))
+        .sort((a, b) => b.amount - a.amount);
 
       setStats({
         totalBalance: Math.round((youAreOwed - youOwe) * 100) / 100,
@@ -92,8 +105,7 @@ function Dashboard() {
         activeGroups: groupsList.length,
       });
 
-      setRecentExpenses(allExpenses.slice(0, 5));
-      setGroups(groupsWithBalance.slice(0, 3));
+      setCategoryBreakdown(formattedBreakdown);
       setMonthlySpending(thisMonthTotal);
     } catch (err) {
       setError(
@@ -167,118 +179,46 @@ function Dashboard() {
         ))}
       </div>
 
-      <div className="mt-8 bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Recent Expenses</h2>
-          <Link
-            to="/panel/expenses"
-            className="text-indigo-600 font-medium hover:underline"
-          >
-            View All
-          </Link>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+        <AIAssistant />
 
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-slate-200 text-left">
-              <th className="pb-3">Expense</th>
-              <th className="pb-3">Group</th>
-              <th className="pb-3">Paid By</th>
-              <th className="pb-3 text-right">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentExpenses.length === 0 ? (
-              <tr>
-                <td colSpan="4" className="py-10 text-center text-slate-400">
-                  No expenses yet.
-                </td>
-              </tr>
-            ) : (
-              recentExpenses.map((expense) => (
-                <tr
-                  key={expense._id}
-                  className="border-t border-slate-100 hover:bg-slate-50"
-                >
-                  <td className="py-4 font-semibold">{expense.title}</td>
-                  <td>{expense.groupName}</td>
-                  <td>{expense.paidBy?.name}</td>
-                  <td className="text-right font-bold text-red-500">
-                    ₹{expense.amount}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col h-full">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold">Your Groups</h2>
-            <Link
-              to="/panel/groups"
-              className="text-indigo-600 font-medium hover:underline"
-            >
-              View All
-            </Link>
-          </div>
-
-          {groups.length === 0 ? (
-            <p className="text-slate-400 text-center py-10">
-              No groups yet. Create one from the Groups page.
+            <h2 className="text-xl font-bold">Monthly Spending</h2>
+            <p className="text-slate-400 text-sm font-medium">
+              {new Date().toLocaleString("en-IN", { month: "long", year: "numeric" })}
             </p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {groups.map((group) => (
-                <div
-                  key={group._id}
-                  onClick={() => navigate(`/panel/groups/${group._id}`)}
-                  className="border border-slate-200 rounded-2xl p-5 hover:shadow-lg transition-all cursor-pointer"
-                >
-                  <div className="flex justify-between items-start">
-                    <FiUsers className="text-4xl text-indigo-500" />
-                    <span
-                      className={`font-bold ${
-                        group.balance > 0
-                          ? "text-emerald-600"
-                          : group.balance < 0
-                          ? "text-red-500"
-                          : "text-slate-600"
-                      }`}
-                    >
-                      {group.balance > 0
-                        ? `+₹${group.balance}`
-                        : group.balance < 0
-                        ? `-₹${Math.abs(group.balance)}`
-                        : "₹0"}
-                    </span>
-                  </div>
-                  <h3 className="text-lg font-bold mt-4">{group.name}</h3>
-                  <p className="text-slate-500 text-sm">{group.type}</p>
-                  <p className="text-slate-600 text-sm mt-2">
-                    {group.members?.length || 0} Members ·{" "}
-                    {group.expenseCount || 0} Expenses
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-          <h2 className="text-xl font-bold mb-6">Monthly Spending</h2>
-          <div className="h-72 rounded-2xl bg-slate-100 flex flex-col items-center justify-center">
+          </div>
+          
+          <div className="mb-8 border-b border-slate-100 pb-6">
             <p className="text-4xl font-bold text-indigo-600">
               {formatCurrency(monthlySpending)}
             </p>
-            <p className="text-slate-400 text-sm mt-2">
-              {new Date().toLocaleString("en-IN", {
-                month: "long",
-                year: "numeric",
-              })}
-            </p>
+            <p className="text-slate-500 text-sm mt-1">Total this month</p>
+          </div>
+          
+          <div className="flex-1 flex flex-col gap-5 overflow-y-auto pr-2">
+            {categoryBreakdown.length === 0 ? (
+              <p className="text-slate-400 text-sm text-center mt-4">No expenses this month.</p>
+            ) : (
+              categoryBreakdown.map((item) => {
+                const percentage = monthlySpending > 0 ? (item.amount / monthlySpending) * 100 : 0;
+                return (
+                  <div key={item.category} className="w-full group">
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="font-medium text-slate-700">{item.category}</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(item.amount)}</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                      <div 
+                        className="bg-indigo-500 h-full rounded-full transition-all duration-500 ease-out group-hover:bg-indigo-600" 
+                        style={{ width: `${percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

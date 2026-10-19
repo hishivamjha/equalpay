@@ -77,10 +77,18 @@ const getGroupById = async (req, res) => {
 const addMember = async (req, res) => {
   try {
     const { email } = req.body;
-    const group = await Group.findById(req.params.id);
+    const group = await Group.findById(req.params.id).populate("members.user");
 
     if (!group) {
       return res.status(404).json({ success: false, message: "Group not found" });
+    }
+
+    const currentUser = await User.findOne({ email: req.user.email });
+    if (!currentUser) return res.status(404).json({ success: false, message: "User not found" });
+
+    const memberInfo = group.members.find((m) => m.user._id.toString() === currentUser._id.toString());
+    if (!memberInfo || memberInfo.role !== "admin") {
+      return res.status(403).json({ success: false, message: "Only group admins can add members" });
     }
 
     const newUser = await User.findOne({ email });
@@ -89,7 +97,7 @@ const addMember = async (req, res) => {
     }
 
     const alreadyAdded = group.members.some(
-      (m) => m.user.toString() === newUser._id.toString()
+      (m) => m.user._id.toString() === newUser._id.toString()
     );
 
     if (alreadyAdded) {
@@ -112,13 +120,49 @@ const addMember = async (req, res) => {
 
 const deleteGroup = async (req, res) => {
   try {
-    const group = await Group.findByIdAndDelete(req.params.id);
+    const group = await Group.findById(req.params.id).populate("members.user");
+    if (!group) return res.status(404).json({ success: false, message: "Group not found" });
 
-    if (!group) {
-      return res.status(404).json({ success: false, message: "Group not found" });
+    const currentUser = await User.findOne({ email: req.user.email });
+    if (!currentUser) return res.status(404).json({ success: false, message: "User not found" });
+
+    const memberInfo = group.members.find((m) => m.user._id.toString() === currentUser._id.toString());
+    if (!memberInfo || memberInfo.role !== "admin") {
+      return res.status(403).json({ success: false, message: "Only group admins can delete the group" });
     }
 
+    await Group.findByIdAndDelete(req.params.id);
     return res.status(200).json({ success: true, message: "Group deleted" });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Something went wrong" });
+  }
+};
+
+const leaveGroup = async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id).populate("members.user");
+    if (!group) return res.status(404).json({ success: false, message: "Group not found" });
+
+    const currentUser = await User.findOne({ email: req.user.email });
+    if (!currentUser) return res.status(404).json({ success: false, message: "User not found" });
+
+    const memberIndex = group.members.findIndex((m) => m.user._id.toString() === currentUser._id.toString());
+    if (memberIndex === -1) {
+      return res.status(400).json({ success: false, message: "You are not a member of this group" });
+    }
+
+    const memberInfo = group.members[memberIndex];
+    if (memberInfo.role === "admin") {
+      const adminCount = group.members.filter(m => m.role === "admin").length;
+      if (adminCount === 1) {
+        return res.status(400).json({ success: false, message: "You are the only admin. Assign another admin or delete the group." });
+      }
+    }
+
+    group.members.splice(memberIndex, 1);
+    await group.save();
+
+    return res.status(200).json({ success: true, message: "Successfully left the group" });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Something went wrong" });
   }
@@ -130,4 +174,5 @@ module.exports = {
   getGroupById,
   addMember,
   deleteGroup,
+  leaveGroup,
 };

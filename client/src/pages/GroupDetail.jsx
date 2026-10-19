@@ -14,6 +14,8 @@ function GroupDetail() {
   const [memberEmail, setMemberEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [errors, setErrors] = useState({});
 
   const [expenseForm, setExpenseForm] = useState({
@@ -104,7 +106,7 @@ function GroupDetail() {
       });
   };
 
-  const handleDeleteGroup = () => {
+  const confirmDeleteGroup = () => {
     api
       .delete(`/groups/${groupId}`)
       .then(() => navigate("/panel/groups"))
@@ -112,11 +114,26 @@ function GroupDetail() {
         setErrors({
           message: error.response?.data?.message || "Failed to delete group",
         });
+        setShowDeleteModal(false);
+      });
+  };
+
+  const confirmLeaveGroup = () => {
+    api
+      .post(`/groups/${groupId}/leave`)
+      .then(() => navigate("/panel/groups"))
+      .catch((error) => {
+        setErrors({
+          message: error.response?.data?.message || "Failed to leave group",
+        });
+        setShowLeaveModal(false);
       });
   };
 
   if (loading) return <p className="text-slate-500">Loading group...</p>;
   if (!group) return <p className="text-red-500">{errors.message || "Group not found"}</p>;
+
+  const isAdmin = group.members.find((m) => m.user.email === email)?.role === "admin";
 
   return (
     <div>
@@ -159,12 +176,21 @@ function GroupDetail() {
               Add Expense
             </button>
 
-            <button
-              onClick={handleDeleteGroup}
-              className="px-4 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100"
-            >
-              Delete Group
-            </button>
+            {isAdmin ? (
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="px-4 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100"
+              >
+                Delete Group
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowLeaveModal(true)}
+                className="px-4 py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100"
+              >
+                Leave Group
+              </button>
+            )}
           </div>
         </div>
 
@@ -192,22 +218,24 @@ function GroupDetail() {
           </div>
         </div>
 
-        <form onSubmit={handleAddMember} className="mt-8 flex gap-3">
-          <input
-            type="email"
-            placeholder="Add member by email"
-            value={memberEmail}
-            onChange={(e) => setMemberEmail(e.target.value)}
-            required
-            className="flex-1 h-12 border border-slate-300 rounded-xl px-4 outline-none focus:ring-4 focus:ring-indigo-100"
-          />
-          <button
-            type="submit"
-            className="px-6 py-3 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"
-          >
-            Add Member
-          </button>
-        </form>
+        {isAdmin && (
+          <form onSubmit={handleAddMember} className="mt-8 flex gap-3">
+            <input
+              type="email"
+              placeholder="Add member by email"
+              value={memberEmail}
+              onChange={(e) => setMemberEmail(e.target.value)}
+              required
+              className="flex-1 h-12 border border-slate-300 rounded-xl px-4 outline-none focus:ring-4 focus:ring-indigo-100"
+            />
+            <button
+              type="submit"
+              className="px-6 py-3 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"
+            >
+              Add Member
+            </button>
+          </form>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-3xl p-8">
@@ -348,6 +376,52 @@ function GroupDetail() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-[400px] bg-white rounded-3xl p-8 shadow-2xl text-center">
+            <h2 className="text-2xl font-bold text-slate-900 mb-4">Delete Group</h2>
+            <p className="text-slate-500 mb-8">Are you sure you want to delete this entire group? This action cannot be undone.</p>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-6 py-3 rounded-xl border border-slate-300 hover:bg-slate-100 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteGroup}
+                className="px-6 py-3 rounded-xl bg-red-500 text-white hover:bg-red-600 transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLeaveModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-[400px] bg-white rounded-3xl p-8 shadow-2xl text-center">
+            <h2 className="text-2xl font-bold text-slate-900 mb-4">Leave Group</h2>
+            <p className="text-slate-500 mb-8">Are you sure you want to leave this group? You will no longer be able to see its expenses.</p>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="px-6 py-3 rounded-xl border border-slate-300 hover:bg-slate-100 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmLeaveGroup}
+                className="px-6 py-3 rounded-xl bg-orange-500 text-white hover:bg-orange-600 transition"
+              >
+                Leave
+              </button>
+            </div>
           </div>
         </div>
       )}

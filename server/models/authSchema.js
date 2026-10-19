@@ -1,24 +1,28 @@
 const mongoose = require("mongoose")
 
 const auth_schema = mongoose.Schema({
-    name:{
-        type:String,
+    name: {
+        type: String,
         required: true
     },
-    email:{
-        type:String,
+    email: {
+        type: String,
         required: true,
         unique: true
     },
-    password:{
-        type:String,
+    password: {
+        type: String,
         required: true
     },
-    confirmPassword:{
-        type:String
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
+    confirmPassword: {
+        type: String
     }
 });
 
-const auth_data = mongoose.model("auth_data",auth_schema);
+const auth_data = mongoose.model("auth_data", auth_schema);
 
 module.exports = auth_data

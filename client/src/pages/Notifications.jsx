@@ -10,9 +10,9 @@ import {
 function Notifications() {
 
   const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState({});
+  const [dismissingIds, setDismissingIds] = useState([]);
 
   const fetchNotifications = () => {
     setLoading(true);
@@ -22,7 +22,6 @@ function Notifications() {
       .get(`/notifications`)
       .then((res) => {
         setNotifications(res.data.notifications);
-        setUnreadCount(res.data.unreadCount);
       })
       .catch((error) => {
         setErrors({
@@ -58,22 +57,25 @@ function Notifications() {
     return `${Math.floor(seconds / 86400)}d ago`;
   };
 
-  const handleMarkRead = (id) => {
-    api.patch(`/notifications/${id}/read`).then(() => {
-      setNotifications((prev) =>
-        prev.map((n) => (n._id === id ? { ...n, read: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    });
+  const handleDelete = (id) => {
+    setDismissingIds((prev) => [...prev, id]);
+    setTimeout(() => {
+      api.delete(`/notifications/${id}`).then(() => {
+        setNotifications((prev) => prev.filter((n) => n._id !== id));
+        setDismissingIds((prev) => prev.filter((dismissId) => dismissId !== id));
+      });
+    }, 300);
   };
 
-  const handleMarkAllRead = () => {
-    api
-      .patch(`/notifications/read-all`)
-      .then(() => {
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-        setUnreadCount(0);
+  const handleDeleteAll = () => {
+    const allIds = notifications.map((n) => n._id);
+    setDismissingIds(allIds);
+    setTimeout(() => {
+      api.delete(`/notifications/all`).then(() => {
+        setNotifications([]);
+        setDismissingIds([]);
       });
+    }, 300);
   };
 
   if (loading) {
@@ -90,12 +92,12 @@ function Notifications() {
           </p>
         </div>
 
-        {unreadCount > 0 && (
+        {notifications.length > 0 && (
           <button
-            onClick={handleMarkAllRead}
-            className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+            onClick={handleDeleteAll}
+            className="px-5 py-2 rounded-xl bg-red-50 text-red-600 font-medium text-sm hover:bg-red-100 transition-colors"
           >
-            Mark all as read ({unreadCount})
+            Clear all ({notifications.length})
           </button>
         )}
       </div>
@@ -113,16 +115,18 @@ function Notifications() {
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-4 max-w-4xl">
+        <div className="flex flex-col max-w-4xl">
           {notifications.map((n) => {
             const { icon, bg } = getIcon(n.type);
 
+            const isDismissing = dismissingIds.includes(n._id);
             return (
               <div
                 key={n._id}
-                onClick={() => !n.read && handleMarkRead(n._id)}
-                className={`bg-white rounded-3xl border p-6 flex items-center gap-5 shadow-sm hover:shadow-md transition-all cursor-pointer ${n.read ? "border-slate-200 opacity-70" : "border-indigo-200"
-                  }`}
+                onClick={() => handleDelete(n._id)}
+                className={`bg-white rounded-3xl border border-indigo-200 flex items-center gap-5 shadow-sm hover:shadow-md cursor-pointer transition-all duration-300 ease-in-out transform overflow-hidden ${
+                  isDismissing ? "translate-x-full opacity-0 max-h-0 !p-0 !mb-0 !border-0" : "translate-x-0 opacity-100 max-h-48 p-6 mb-4"
+                }`}
               >
                 <div
                   className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 ${bg}`}
@@ -144,9 +148,7 @@ function Notifications() {
                   {timeAgo(n.createdAt)}
                 </div>
 
-                {!n.read && (
-                  <div className="w-3 h-3 rounded-full bg-indigo-500 flex-shrink-0" />
-                )}
+                <div className="w-3 h-3 rounded-full bg-indigo-500 flex-shrink-0" />
               </div>
             );
           })}

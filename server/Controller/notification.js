@@ -66,26 +66,22 @@ const getMyNotifications = async (req, res) => {
 };
 
 
-const markAsRead = async (req, res) => {
+const deleteNotification = async (req, res) => {
   try {
-    const notification = await Notification.findByIdAndUpdate(
-      req.params.id,
-      { read: true },
-      { new: true }
-    );
+    const notification = await Notification.findByIdAndDelete(req.params.id);
 
     if (!notification) {
       return res.status(404).json({ success: false, message: "Notification not found" });
     }
 
-    return res.status(200).json({ success: true, notification });
+    return res.status(200).json({ success: true, message: "Notification deleted" });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Something went wrong" });
   }
 };
 
 
-const markAllAsRead = async (req, res) => {
+const deleteAllNotifications = async (req, res) => {
   try {
     const email = req.user.email;
 
@@ -94,12 +90,9 @@ const markAllAsRead = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    await Notification.updateMany(
-      { userId: user._id, read: false },
-      { read: true }
-    );
+    await Notification.deleteMany({ userId: user._id });
 
-    return res.status(200).json({ success: true, message: "All marked as read" });
+    return res.status(200).json({ success: true, message: "All notifications deleted" });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Something went wrong" });
   }
@@ -109,6 +102,6 @@ module.exports = {
   notifyUser,
   notifyGroupMembers,
   getMyNotifications,
-  markAsRead,
-  markAllAsRead,
+  deleteNotification,
+  deleteAllNotifications,
 };

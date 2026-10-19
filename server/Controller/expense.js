@@ -125,4 +125,77 @@ const getGroupBalance = async (req, res) => {
   }
 };
 
-module.exports = { createExpense, getExpensesByGroup, getGroupBalance };
+const updateExpense = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, amount, category, date, groupId } = req.body;
+    
+    const user = await User.findOne({ email: req.user.email });
+    const expense = await Expense.findById(id).populate("groupId");
+    
+    if (!expense) return res.status(404).json({ success: false, message: "Expense not found" });
+
+    const isPayer = expense.paidBy.toString() === user._id.toString();
+    const isSplitMember = expense.splits.some(s => s.user && s.user.toString() === user._id.toString());
+    
+    if (!isPayer && !isSplitMember) {
+      return res.status(403).json({ success: false, message: "Not authorized to edit this expense" });
+    }
+
+    const group = await Group.findById(groupId || expense.groupId._id).populate("members.user");
+    if (!group) return res.status(404).json({ success: false, message: "Group not found" });
+
+    let updatedSplits = expense.splits;
+    if (amount !== undefined) {
+      const memberCount = group.members.length;
+      const sharePerPerson = Math.round((amount / memberCount) * 100) / 100;
+      updatedSplits = group.members.map((m) => ({
+        user: m.user._id ?? m.user,
+        share: sharePerPerson,
+      }));
+    }
+
+    const updatedExpense = await Expense.findByIdAndUpdate(
+      id,
+      {
+        title: title || expense.title,
+        amount: amount !== undefined ? amount : expense.amount,
+        category: category || expense.category,
+        date: date || expense.date,
+        groupId: groupId || expense.groupId._id,
+        splits: updatedSplits,
+      },
+      { new: true }
+    ).populate("paidBy", "name email").populate("splits.user", "name email");
+
+    return res.status(200).json({ success: true, expense: updatedExpense });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Failed to update expense" });
+  }
+};
+
+const deleteExpense = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const user = await User.findOne({ email: req.user.email });
+    const expense = await Expense.findById(id);
+    
+    if (!expense) return res.status(404).json({ success: false, message: "Expense not found" });
+
+    const isPayer = expense.paidBy.toString() === user._id.toString();
+    const isSplitMember = expense.splits.some(s => s.user && s.user.toString() === user._id.toString());
+    
+    if (!isPayer && !isSplitMember) {
+      return res.status(403).json({ success: false, message: "Not authorized to delete this expense" });
+    }
+
+    await Expense.findByIdAndDelete(id);
+
+    return res.status(200).json({ success: true, message: "Expense deleted successfully" });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Failed to delete expense" });
+  }
+};
+
+module.exports = { createExpense, getExpensesByGroup, getGroupBalance, updateExpense, deleteExpense };
